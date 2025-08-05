@@ -18,11 +18,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory cache for fetched website content
+# In-memory cache for website content
 cache = {}
 cache_lock = asyncio.Lock()
 
-# Queue to rate-limit Gemini calls
+# Rate-limit Gemini calls
 gemini_queue = asyncio.Queue(maxsize=3)
 
 # --------- Fetch Website Content ---------
@@ -38,13 +38,13 @@ async def fetch_website_text(url: str) -> str:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(url)
             response.raise_for_status()
-            soup = BeautifulSoup(response.text, "html.parser")
 
+            soup = BeautifulSoup(response.text, "html.parser")
             for tag in soup(["script", "style", "header", "footer", "nav"]):
                 tag.decompose()
 
             text = soup.get_text(separator=" ", strip=True)
-            content = text[:12000]  # Trim to safe token size
+            content = text[:12000]
 
             async with cache_lock:
                 cache[url] = content
@@ -60,9 +60,7 @@ async def chat(request: Request):
     user_prompt = data.get("prompt", "").strip()
     context_raw = data.get("context", "").strip()
 
-    # Expecting context format:
-    # Website: <url>
-    # Language: <optional language>
+    # Validate context format
     if not context_raw.startswith("Website: ") or "Language: " not in context_raw:
         return {
             "response": "Invalid context format. Expected:\nWebsite: <url>\\nLanguage: <optional language>"
@@ -85,7 +83,7 @@ async def chat(request: Request):
     except Exception:
         detected_lang = "unknown"
 
-    # Final Prompt Construction
+    # Final prompt
     final_prompt = f"{user_prompt}\n\n"
     final_prompt += "DONT USE SPECIAL-CASE CHARACTERS LIKE ASTERISKS AND UNDERSCORES FOR TEXT-STYLING! USE PLAIN CLEAN TEXT ONLY! USE NUMBERS (1.,2.,3.,...) AND ROMAN NUMBERS (IF NEEDED) FOR KEYPOINTS AND NUMBERING!\n\n"
 
